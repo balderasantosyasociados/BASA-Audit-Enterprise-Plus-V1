@@ -1,19 +1,15 @@
 # -*- coding: utf-8 -*-
+import os
 import sqlite3
-import streamlit as st
+from flask import Flask, render_template_string, request, redirect, url_for, Response
 
-# Configuración estricta de página para producción
-st.set_page_config(
-    page_title="BASA Audit Enterprise Plus V1",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+app = Flask(__name__)
 
-# Base de datos relacional local
-DATABASE = 'basa_audit.db'
+# Configuración de base de datos relacional para BASA Audit Enterprise Plus V1
+DATABASE = os.path.join(os.path.getcwd(), 'basa_audit.db')
 
 def init_db():
-    """Inicializa la base de datos relacional y crea la tabla si no existe."""
+    """Inicializa la base de datos y crea la tabla de proyectos si no existe."""
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     cursor.execute('''
@@ -26,6 +22,7 @@ def init_db():
             status TEXT NOT NULL
         )
     ''')
+    # Inyectar datos iniciales de prueba si la base de datos está limpia
     cursor.execute("SELECT COUNT(*) FROM projects")
     if cursor.fetchone() == 0:
         cursor.executemany('''
@@ -38,202 +35,170 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Iniciar persistencia de datos
+# Inicialización automatizada al arrancar
 init_db()
 
 # =========================================================================
-# LÓGICA DE PROCESAMIENTO DE ACCIONES (ELIMINAR / CONCLUIR)
+# INTERFAZ DE USUARIO INTEGRADA (HTML5 + CSS3 + JAVASCRIPT JINJA2 COMPATIBLE)
 # =========================================================================
-if "action_to_do" in st.session_state:
-    action = st.session_state.action_to_do
-    project_id = st.session_state.project_id_target
-    
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    if action == "concluir":
-        cursor.execute("UPDATE projects SET status = 'Concluido' WHERE id = ?", (project_id,))
-        st.toast("🎯 Proyecto marcado como Concluido")
-    elif action == "eliminar":
-        cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-        st.toast("🗑️ Proyecto eliminado permanentemente")
-    conn.commit()
-    conn.close()
-    
-    # Limpiar estado para evitar bucles de ejecución
-    del st.session_state.action_to_do
-    del st.session_state.project_id_target
-    st.rerun()
-
-# Estilos corporativos CSS3 inyectados de forma segura (Sin usar F-Strings para evitar errores)
-st.markdown("""
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>BASA Audit Enterprise Plus V1</title>
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0">
     <style>
-        #MainMenu, header, footer {visibility: hidden;}
-        .block-container {padding-top: 1rem; padding-bottom: 1rem;}
-        .custom-header {
-            background-color: #0f172a;
+        :root {
+            --primary-color: #0f172a;
+            --accent-color: #0284c7;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #1e293b;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            background-color: var(--primary-color);
             color: white;
-            padding: 20px 30px;
+            padding: 15px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-radius: 6px;
-            margin-bottom: 25px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .custom-header h1 { margin: 0; font-size: 1.6rem; color: white !important; }
-        .custom-badge {
-            background-color: #0284c7;
-            padding: 4px 12px;
+        .header h1 { margin: 0; font-size: 1.4rem; letter-spacing: 0.5px; }
+        .badge {
+            background-color: var(--accent-color);
+            padding: 4px 10px;
             border-radius: 4px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: bold;
-            color: white;
         }
-        .card-title {
-            font-size: 1.25rem;
-            color: #0f172a;
-            font-weight: 600;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 8px;
-            margin-bottom: 15px;
-        }
+        .container { max-width: 1400px; margin: 30px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 3fr; gap: 30px; }
+        @media(max-width: 1024px) { .container { grid-template-columns: 1fr; } }
+        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); height: fit-content; }
+        .card h2 { margin-top: 0; font-size: 1.2rem; color: var(--primary-color); border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 15px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; }
+        .form-group input, .form-group select { width: 100%; padding: 8px 12px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.95rem; }
+        .btn { background-color: var(--accent-color); color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer; font-weight: 500; width: 100%; transition: background 0.2s; font-size: 1rem; text-align: center; display: inline-block; text-decoration: none; box-sizing: border-box; }
+        .btn:hover { background-color: #0369a1; }
+        .btn-secondary { background-color: #64748b; margin-top: 10px; }
+        .btn-secondary:hover { background-color: #475569; }
+        
+        /* Controles de Acción en Fila */
+        .action-cell { display: flex; gap: 6px; }
+        .btn-action { padding: 4px 8px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; color: white; font-weight: 500; text-decoration: none; }
+        .btn-concluir { background-color: #10b981; }
+        .btn-concluir:hover { background-color: #059669; }
+        .btn-eliminar { background-color: #ef4444; }
+        .btn-eliminar:hover { background-color: #dc2626; }
+        
+        /* Filtros */
+        .filter-bar { background: #f1f5f9; padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; border: 1px solid var(--border-color); }
+        .filter-group { flex: 1; }
+        .filter-group label { display: block; margin-bottom: 4px; font-size: 0.85rem; font-weight: 500; }
+        .btn-filter { width: auto; padding: 8px 20px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; }
+        th { background-color: #f1f5f9; color: var(--primary-color); font-weight: 600; }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; text-align: center; }
+        .status-activo { background-color: #dcfce7; color: #15803d; }
+        .status-accion { background-color: #fee2e2; color: #b91c1c; }
+        .status-concluido { background-color: #f1f5f9; color: #475569; }
     </style>
-    
-    <div class="custom-header">
+</head>
+<body>
+
+    <div class="header">
         <h1>BASA Audit Enterprise Plus</h1>
-        <span class="custom-badge">V1.1.0 - Full Enterprise</span>
+        <span class="badge">V1.1.0 - Production Full</span>
     </div>
-""", unsafe_allow_html=True)
 
-# =========================================================================
-# MENÚ LATERAL: SISTEMA DE FILTROS Y EXPORTACIÓN
-# =========================================================================
-with st.sidebar:
-    st.markdown('<div class="card-title">🔍 Filtros y Herramientas</div>', unsafe_allow_html=True)
-    
-    # Obtener lista de áreas únicas de la BD para el buscador
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT area FROM projects")
-    areas_disponibles = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    
-    filtro_area = st.selectbox("Filtrar por Área:", ["Todas"] + areas_disponibles)
-    buscar_nombre = st.text_input("Buscar por Nombre:", placeholder="Ej: Financiera")
-    
-    st.markdown("---")
-    st.markdown('<div class="card-title">📦 Exportar Datos</div>', unsafe_allow_html=True)
-    
-    # Generar la data lista para descargar en formato CSV (Excel)
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, area, start_date, end_date, status FROM projects ORDER BY id DESC")
-    all_data = cursor.fetchall()
-    conn.close()
-    
-    csv_content = "Proyecto,Area,Fecha Inicio,Fecha Fin,Estado\n"
-    for row in all_data:
-        csv_content += '"' + row[0] + '","' + row[1] + '","' + row[2] + '","' + row[3] + '","' + row[4] + '"\n'
-        
-    st.download_button(
-        label="📥 Descargar a Excel (CSV)",
-        data=csv_content.encode('utf-8-sig'),
-        file_name="Plan_Auditoria_BASA.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
-
-# Layout principal: Distribución en columnas (1:2)
-col_formulario, col_tabla = st.columns([1, 2], gap="large")
-
-# =========================================================================
-# COMPONENTE IZQUIERDO: FORMULARIO DE REGISTRO
-# =========================================================================
-with col_formulario:
-    st.markdown('<div class="card-title">Añadir Proyecto</div>', unsafe_allow_html=True)
-    
-    with st.form("project_form", clear_on_submit=True):
-        name = st.text_input("Nombre del Proyecto / Auditoría", placeholder="Ej: Control de Inventario")
-        area = st.text_input("Área Asignada", placeholder="Ej: Operaciones")
-        start_date = st.date_input("Fecha de Inicio")
-        end_date = st.date_input("Fecha de Finalización")
-        status = st.selectbox("Estado del Flujo", ["Activo", "Se necesita acción"])
-        
-        submit_btn = st.form_submit_button("Registrar en Panel", use_container_width=True)
-        
-        if submit_btn:
-            if name and area:
-                conn = sqlite3.connect(DATABASE)
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO projects (name, area, start_date, end_date, status)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (name, area, str(start_date), str(end_date), status))
-                conn.commit()
-                conn.close()
-                st.toast("✅ Registro completado exitosamente")
-                st.rerun()
-            else:
-                st.error("Campos obligatorios incompletos.")
-
-# =========================================================================
-# COMPONENTE DERECHO: VISOR DINÁMICO CON ACCIONES
-# =========================================================================
-with col_tabla:
-    st.markdown('<div class="card-title">Panel de Control: Plan de Auditoría</div>', unsafe_allow_html=True)
-    
-    # Consulta SQL dinámica basada en los filtros
-    query = "SELECT id, name, area, start_date, end_date, status FROM projects WHERE 1=1"
-    params = []
-    
-    if filtro_area != "Todas":
-        query += " AND area = ?"
-        params.append(filtro_area)
-    if buscar_nombre:
-        query += " AND name LIKE ?"
-        params.append("%" + buscar_nombre + "%")
-        
-    query += " ORDER BY id DESC"
-    
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute(query, params)
-    projects_list = cursor.fetchall()
-    conn.close()
-    
-    if not projects_list:
-        st.info("No se encontraron auditorías que coincidan con los filtros aplicados.")
-    else:
-        # Cabecera estática de la tabla corporativa
-        st.markdown("""
-        <table style="width:100%; border-collapse: collapse; font-family: sans-serif; margin-bottom: 10px;">
-            <thead>
-                <tr style="background-color: #f1f5f9; border-bottom: 2px solid #e2e8f0;">
-                    <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600; width: 30%;">Proyecto</th>
-                    <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600; width: 20%;">Área</th>
-                    <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600; width: 25%;">Vigencia</th>
-                    <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600; width: 25%;">Estado</th>
-                </tr>
-            </thead>
-        </table>
-        """, unsafe_allow_html=True)
-        
-        # Iteración segura utilizando concatenación e inyección HTML básica
-        for row in projects_list:
-            p_id, p_name, p_area, p_start, p_end, p_status = row
+    <div class="container">
+        <!-- Panel Izquierdo: Formulario de Registro y Exportación -->
+        <div class="card">
+            <h2>Añadir Proyecto</h2>
+            <form action="{{ url_for('add_project') }}" method="POST">
+                <div class="form-group">
+                    <label>Nombre del Proyecto / Auditoría</label>
+                    <input type="text" name="name" required placeholder="Ej: Control de Inventario">
+                </div>
+                <div class="form-group">
+                    <label>Área Asignada</label>
+                    <input type="text" name="area" required placeholder="Ej: Operaciones">
+                </div>
+                <div class="form-group">
+                    <label>Fecha de Inicio</label>
+                    <input type="date" name="start_date" required>
+                </div>
+                <div class="form-group">
+                    <label>Fecha de Finalización</label>
+                    <input type="date" name="end_date" required>
+                </div>
+                <div class="form-group">
+                    <label>Estado del Flujo</label>
+                    <select name="status">
+                        <option value="Activo">Activo</option>
+                        <option value="Se necesita acción">Se necesita acción</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn">Registrar en Panel</button>
+            </form>
             
-            # Definir color del Badge según estado
-            if p_status == "Activo":
-                b_color, t_color = "#dcfce7", "#15803d"
-            elif p_status == "Concluido":
-                b_color, t_color = "#e2e8f0", "#475569"
-            else:
-                b_color, t_color = "#fee2e2", "#b91c1c"
-                
-            # Renderizado HTML libre de f-string complejo
-            html_row = f"""
-            <table style="width:100%; border-collapse: collapse; font-family: sans-serif; margin-top: -10px;">
-                <tr style="border-bottom: 1px solid #e2e8f0; background: white;">
-                    <td style="padding: 12px; color: #1e293b; width: 30%;"><strong>{p_name}</strong></td>
-                    <td style="padding: 12px; color: #1e293b; width: 20%;">{p_area}</td>
-                    <td style="padding: 12px; color: #1e293b; width: 25%; font-size: 0.85rem;">{p_start} / {p_end}</td>
-                    <td style="padding: 12px; width: 25%;">
+            <a href="{{ url_for('export_csv', area=selected_area) }}" class="btn btn-secondary">📥 Exportar a Excel (CSV)</a>
+        </div>
+
+        <!-- Panel Derecho: Filtros y Visor de Plan de Auditoría -->
+        <div class="card">
+            <h2>Panel de Control: Plan de Auditoría</h2>
+            
+            <!-- Barra de Filtros por Área -->
+            <form action="{{ url_for('index') }}" method="GET" class="filter-bar">
+                <div class="filter-group">
+                    <label>Filtrar por Área Asignada</label>
+                    <select name="area">
+                        <option value="">-- Mostrar Todas las Áreas --</option>
+                        {% for area in areas %}
+                            <option value="{{ area }}" {% if area == selected_area %}selected{% endif %}>{{ area }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-filter">Filtrar</button>
+            </form>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Proyecto</th>
+                        <th>Área</th>
+                        <th>Vigencia (Inicio / Fin)</th>
+                        <th>Estado</th>
+                        <th style="width: 150px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in projects %}
+                    <tr>
+                        <td><strong>{{ project[1] }}</strong></td>
+                        <td>{{ project[2] }}</td>
+                        <td>{{ project[3] }} ó {{ project[4] }}</td>
+                        <td>
+                            {% if project[5] == 'Activo' %}
+                                <span class="status-badge status-activo">Activo</span>
+                            {% elif project[5] == 'Concluido' %}
+                                <span class="status-badge status-concluido">Concluido</span>
+                            {% else %}
+                                <span class="status-badge status-accion">Se necesita acción</span>
+                            {% endif %}
+                        </td>
+                        <td class="action-cell">
+                            {% if project[5] != 'Concluido' %}
