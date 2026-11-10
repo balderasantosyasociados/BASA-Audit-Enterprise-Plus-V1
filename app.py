@@ -6,7 +6,8 @@ from flask import Flask, render_template_string, request, redirect, url_for
 app = Flask(__name__)
 
 # Configuración de base de datos relacional para BASA Audit Enterprise Plus V1
-DATABASE = 'basa_audit.db'
+# Usamos una ruta absoluta temporal para evitar fallos de permisos en servidores en la nube
+DATABASE = os.path.join(os.path.getcwd(), 'basa_audit.db')
 
 def init_db():
     """Inicializa la base de datos y crea la tabla de proyectos si no existe."""
@@ -24,7 +25,7 @@ def init_db():
     ''')
     # Inyectar datos iniciales de prueba si la base de datos está limpia
     cursor.execute("SELECT COUNT(*) FROM projects")
-    if cursor.fetchone()[0] == 0:
+    if cursor.fetchone() == 0:
         cursor.executemany('''
             INSERT INTO projects (name, area, start_date, end_date, status)
             VALUES (?, ?, ?, ?, ?)
@@ -35,7 +36,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Inicialización automatizada
+# Inicialización automatizada al arrancar
 init_db()
 
 # =========================================================================
@@ -102,14 +103,14 @@ HTML_TEMPLATE = """
 
     <div class="header">
         <h1>BASA Audit Enterprise Plus</h1>
-        <span class="badge">V1.0.0 - Production</span>
+        <span class="badge">V1.0.0 - Online</span>
     </div>
 
     <div class="container">
         <!-- Panel Izquierdo: Formulario de Registro -->
         <div class="card">
             <h2>Añadir Proyecto</h2>
-            <form action="/add" method="POST">
+            <form action="{{ url_for('add_project') }}" method="POST">
                 <div class="form-group">
                     <label>Nombre del Proyecto / Auditoría</label>
                     <input type="text" name="name" required placeholder="Ej: Control de Inventario">
@@ -207,6 +208,8 @@ def add_project():
         
     return redirect(url_for('index'))
 
+# Condición especial para ejecución:
+# Si se ejecuta localmente usará app.run. Si está online, los servidores como Gunicorn/Render/Heroku/Streamlit usarán la variable 'app'.
 if __name__ == '__main__':
-    # Lanzamiento del servidor web en el puerto de red local
-    app.run(debug=True, port=5000)
+    # Para pruebas locales seguras sin errores de recarga:
+    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
