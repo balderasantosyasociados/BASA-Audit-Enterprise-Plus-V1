@@ -1,0 +1,6 @@
+(
+echo Flask==3.0.3
+echo SQLAlchemy>=2.0.0
+echo numpy>=2.0.0
+echo pandas>=2.2.0
+) > requirements.txt
