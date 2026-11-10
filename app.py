@@ -64,17 +64,11 @@ if "action_to_do" in st.session_state:
     del st.session_state.project_id_target
     st.rerun()
 
-# Estilos corporativos CSS3 inyectados de forma segura
+# Estilos corporativos CSS3 inyectados de forma segura (Sin usar F-Strings para evitar errores)
 st.markdown("""
     <style>
         #MainMenu, header, footer {visibility: hidden;}
         .block-container {padding-top: 1rem; padding-bottom: 1rem;}
-        :root {
-            --primary-color: #0f172a;
-            --accent-color: #0284c7;
-            --bg-color: #f8fafc;
-            --border-color: #e2e8f0;
-        }
         .custom-header {
             background-color: #0f172a;
             color: white;
@@ -138,7 +132,7 @@ with st.sidebar:
     
     csv_content = "Proyecto,Area,Fecha Inicio,Fecha Fin,Estado\n"
     for row in all_data:
-        csv_content += f'"{row[0]}","{row[1]}","{row[2]}","{row[3]}","{row[4]}"\n'
+        csv_content += '"' + row[0] + '","' + row[1] + '","' + row[2] + '","' + row[3] + '","' + row[4] + '"\n'
         
     st.download_button(
         label="📥 Descargar a Excel (CSV)",
@@ -187,7 +181,7 @@ with col_formulario:
 with col_tabla:
     st.markdown('<div class="card-title">Panel de Control: Plan de Auditoría</div>', unsafe_allow_html=True)
     
-    # Construcción de la consulta SQL dinámica basada en los filtros aplicados
+    # Consulta SQL dinámica basada en los filtros
     query = "SELECT id, name, area, start_date, end_date, status FROM projects WHERE 1=1"
     params = []
     
@@ -196,7 +190,7 @@ with col_tabla:
         params.append(filtro_area)
     if buscar_nombre:
         query += " AND name LIKE ?"
-        params.append(f"%{buscar_nombre}%")
+        params.append("%" + buscar_nombre + "%")
         
     query += " ORDER BY id DESC"
     
@@ -209,7 +203,7 @@ with col_tabla:
     if not projects_list:
         st.info("No se encontraron auditorías que coincidan con los filtros aplicados.")
     else:
-        # Renderizado de cabecera de la tabla estructurada
+        # Cabecera estática de la tabla corporativa
         st.markdown("""
         <table style="width:100%; border-collapse: collapse; font-family: sans-serif; margin-bottom: 10px;">
             <thead>
@@ -223,19 +217,23 @@ with col_tabla:
         </table>
         """, unsafe_allow_html=True)
         
-        # Filas interactivas emparejando HTML con botones nativos de Streamlit
+        # Iteración segura utilizando concatenación e inyección HTML básica
         for row in projects_list:
             p_id, p_name, p_area, p_start, p_end, p_status = row
             
-            # Elige el color del estado visual
+            # Definir color del Badge según estado
             if p_status == "Activo":
-                badge_style = "background-color: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;"
+                b_color, t_color = "#dcfce7", "#15803d"
             elif p_status == "Concluido":
-                badge_style = "background-color: #e2e8f0; color: #475569; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;"
+                b_color, t_color = "#e2e8f0", "#475569"
             else:
-                badge_style = "background-color: #fee2e2; color: #b91c1c; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;"
+                b_color, t_color = "#fee2e2", "#b91c1c"
                 
-            # Renderizar bloque de datos
-            st.markdown(f"""
+            # Renderizado HTML libre de f-string complejo
+            html_row = f"""
             <table style="width:100%; border-collapse: collapse; font-family: sans-serif; margin-top: -10px;">
                 <tr style="border-bottom: 1px solid #e2e8f0; background: white;">
+                    <td style="padding: 12px; color: #1e293b; width: 30%;"><strong>{p_name}</strong></td>
+                    <td style="padding: 12px; color: #1e293b; width: 20%;">{p_area}</td>
+                    <td style="padding: 12px; color: #1e293b; width: 25%; font-size: 0.85rem;">{p_start} / {p_end}</td>
+                    <td style="padding: 12px; width: 25%;">
