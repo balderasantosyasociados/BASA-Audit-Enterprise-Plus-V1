@@ -3,4 +3,3 @@ gunicorn==22.0.0
 SQLAlchemy>=2.0.0
 numpy>=2.0.0
 pandas>=2.2.0
-requirements.txt
