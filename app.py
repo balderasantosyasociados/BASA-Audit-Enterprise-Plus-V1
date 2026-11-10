@@ -24,7 +24,7 @@ def init_db():
     ''')
     # Inyectar datos iniciales de prueba si la base de datos está limpia
     cursor.execute("SELECT COUNT(*) FROM projects")
-    if cursor.fetchone() == 0:
+    if cursor.fetchone()[0] == 0:
         cursor.executemany('''
             INSERT INTO projects (name, area, start_date, end_date, status)
             VALUES (?, ?, ?, ?, ?)
@@ -39,7 +39,7 @@ def init_db():
 init_db()
 
 # =========================================================================
-# INTERFAZ DE USUARIO INTEGRADA (HTML5 + CSS3 + JAVASCRIPT JINJA2 COMPATIBLE)
+# INTERFAZ DE USUARIO INTEGRADA (HTML5 + CSS3 + JAVASCRIPT)
 # =========================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -88,9 +88,10 @@ HTML_TEMPLATE = """
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; }
         .form-group input, .form-group select { width: 100%; padding: 8px 12px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.95rem; }
+        
         .btn { background-color: var(--accent-color); color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer; font-weight: 500; width: 100%; transition: background 0.2s; font-size: 1rem; text-align: center; display: inline-block; text-decoration: none; box-sizing: border-box; }
         .btn:hover { background-color: #0369a1; }
-        .btn-secondary { background-color: #64748b; margin-top: 10px; }
+        .btn-secondary { background-color: #64748b; margin-top: 12px; }
         .btn-secondary:hover { background-color: #475569; }
         
         /* Controles de Acción en Fila */
@@ -101,7 +102,7 @@ HTML_TEMPLATE = """
         .btn-eliminar { background-color: #ef4444; }
         .btn-eliminar:hover { background-color: #dc2626; }
         
-        /* Filtros */
+        /* Barra de Filtros */
         .filter-bar { background: #f1f5f9; padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; border: 1px solid var(--border-color); }
         .filter-group { flex: 1; }
         .filter-group label { display: block; margin-bottom: 4px; font-size: 0.85rem; font-weight: 500; }
@@ -161,7 +162,7 @@ HTML_TEMPLATE = """
         <div class="card">
             <h2>Panel de Control: Plan de Auditoría</h2>
             
-            <!-- Barra de Filtros por Área -->
+            <!-- Sistema de Filtros Avanzados -->
             <form action="{{ url_for('index') }}" method="GET" class="filter-bar">
                 <div class="filter-group">
                     <label>Filtrar por Área Asignada</label>
@@ -197,8 +198,3 @@ HTML_TEMPLATE = """
                             {% elif project[5] == 'Concluido' %}
                                 <span class="status-badge status-concluido">Concluido</span>
                             {% else %}
-                                <span class="status-badge status-accion">Se necesita acción</span>
-                            {% endif %}
-                        </td>
-                        <td class="action-cell">
-                            {% if project[5] != 'Concluido' %}
