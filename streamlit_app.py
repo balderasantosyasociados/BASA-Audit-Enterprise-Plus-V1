@@ -6,14 +6,14 @@ import streamlit as st
 st.set_page_config(
     page_title="BASA Audit Enterprise Plus V1",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # Base de datos relacional local
 DATABASE = 'basa_audit.db'
 
 def init_db():
-    """Inicializa la base de datos relacional y crea los registros de prueba."""
+    """Inicializa la base de datos relacional y crea la tabla si no existe."""
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     cursor.execute('''
@@ -40,6 +40,29 @@ def init_db():
 
 # Iniciar persistencia de datos
 init_db()
+
+# =========================================================================
+# LÓGICA DE PROCESAMIENTO DE ACCIONES (ELIMINAR / CONCLUIR)
+# =========================================================================
+if "action_to_do" in st.session_state:
+    action = st.session_state.action_to_do
+    project_id = st.session_state.project_id_target
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    if action == "concluir":
+        cursor.execute("UPDATE projects SET status = 'Concluido' WHERE id = ?", (project_id,))
+        st.toast("🎯 Proyecto marcado como Concluido")
+    elif action == "eliminar":
+        cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        st.toast("🗑️ Proyecto eliminado permanentemente")
+    conn.commit()
+    conn.close()
+    
+    # Limpiar estado para evitar bucles de ejecución
+    del st.session_state.action_to_do
+    del st.session_state.project_id_target
+    st.rerun()
 
 # Estilos corporativos CSS3 inyectados de forma segura
 st.markdown("""
@@ -79,27 +102,58 @@ st.markdown("""
             padding-bottom: 8px;
             margin-bottom: 15px;
         }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            text-align: center;
-        }
-        .status-activo { background-color: #dcfce7; color: #15803d; }
-        .status-accion { background-color: #fee2e2; color: #b91c1c; }
     </style>
     
     <div class="custom-header">
         <h1>BASA Audit Enterprise Plus</h1>
-        <span class="custom-badge">V1.0.0 - Cloud Certified</span>
+        <span class="custom-badge">V1.1.0 - Full Enterprise</span>
     </div>
 """, unsafe_allow_html=True)
 
-# Layout de distribución en columnas (1:2)
+# =========================================================================
+# MENÚ LATERAL: SISTEMA DE FILTROS Y EXPORTACIÓN
+# =========================================================================
+with st.sidebar:
+    st.markdown('<div class="card-title">🔍 Filtros y Herramientas</div>', unsafe_allow_html=True)
+    
+    # Obtener lista de áreas únicas de la BD para el buscador
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT area FROM projects")
+    areas_disponibles = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    
+    filtro_area = st.selectbox("Filtrar por Área:", ["Todas"] + areas_disponibles)
+    buscar_nombre = st.text_input("Buscar por Nombre:", placeholder="Ej: Financiera")
+    
+    st.markdown("---")
+    st.markdown('<div class="card-title">📦 Exportar Datos</div>', unsafe_allow_html=True)
+    
+    # Generar la data lista para descargar en formato CSV (Excel)
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, area, start_date, end_date, status FROM projects ORDER BY id DESC")
+    all_data = cursor.fetchall()
+    conn.close()
+    
+    csv_content = "Proyecto,Area,Fecha Inicio,Fecha Fin,Estado\n"
+    for row in all_data:
+        csv_content += f'"{row[0]}","{row[1]}","{row[2]}","{row[3]}","{row[4]}"\n'
+        
+    st.download_button(
+        label="📥 Descargar a Excel (CSV)",
+        data=csv_content.encode('utf-8-sig'),
+        file_name="Plan_Auditoria_BASA.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
+# Layout principal: Distribución en columnas (1:2)
 col_formulario, col_tabla = st.columns([1, 2], gap="large")
 
+# =========================================================================
+# COMPONENTE IZQUIERDO: FORMULARIO DE REGISTRO
+# =========================================================================
 with col_formulario:
     st.markdown('<div class="card-title">Añadir Proyecto</div>', unsafe_allow_html=True)
     
@@ -127,43 +181,61 @@ with col_formulario:
             else:
                 st.error("Campos obligatorios incompletos.")
 
+# =========================================================================
+# COMPONENTE DERECHO: VISOR DINÁMICO CON ACCIONES
+# =========================================================================
 with col_tabla:
     st.markdown('<div class="card-title">Panel de Control: Plan de Auditoría</div>', unsafe_allow_html=True)
     
-    # Consultar columnas específicas de la base de datos
+    # Construcción de la consulta SQL dinámica basada en los filtros aplicados
+    query = "SELECT id, name, area, start_date, end_date, status FROM projects WHERE 1=1"
+    params = []
+    
+    if filtro_area != "Todas":
+        query += " AND area = ?"
+        params.append(filtro_area)
+    if buscar_nombre:
+        query += " AND name LIKE ?"
+        params.append(f"%{buscar_nombre}%")
+        
+    query += " ORDER BY id DESC"
+    
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-    cursor.execute("SELECT name, area, start_date, end_date, status FROM projects ORDER BY id DESC")
+    cursor.execute(query, params)
     projects_list = cursor.fetchall()
     conn.close()
     
-    # Construcción corregida indexando cada columna del registro (row[0], row[1], etc.)
-    html_table = """
-    <table style="width:100%; border-collapse: collapse; font-family: sans-serif;">
-        <thead>
-            <tr style="background-color: #f1f5f9; border-bottom: 2px solid #e2e8f0;">
-                <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600;">Proyecto</th>
-                <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600;">Área</th>
-                <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600;">Vigencia (Inicio / Fin)</th>
-                <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600;">Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-    """
-    
-    for row in projects_list:
-        # row[0] = name, row[1] = area, row[2] = start_date, row[3] = end_date, row[4] = status
-        status_class = "status-activo" if row[4] == "Activo" else "status-accion"
-        html_table += f"""
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 12px; color: #1e293b;"><strong>{row[0]}</strong></td>
-                <td style="padding: 12px; color: #1e293b;">{row[1]}</td>
-                <td style="padding: 12px; color: #1e293b;">{row[2]} ó {row[3]}</td>
-                <td style="padding: 12px;">
-                    <span class="status-badge {status_class}">{row[4]}</span>
-                </td>
-            </tr>
-        """
+    if not projects_list:
+        st.info("No se encontraron auditorías que coincidan con los filtros aplicados.")
+    else:
+        # Renderizado de cabecera de la tabla estructurada
+        st.markdown("""
+        <table style="width:100%; border-collapse: collapse; font-family: sans-serif; margin-bottom: 10px;">
+            <thead>
+                <tr style="background-color: #f1f5f9; border-bottom: 2px solid #e2e8f0;">
+                    <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600; width: 30%;">Proyecto</th>
+                    <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600; width: 20%;">Área</th>
+                    <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600; width: 25%;">Vigencia</th>
+                    <th style="text-align: left; padding: 12px; color: #0f172a; font-weight: 600; width: 25%;">Estado</th>
+                </tr>
+            </thead>
+        </table>
+        """, unsafe_allow_html=True)
         
-    html_table += "</tbody></table>"
-    st.markdown(html_table, unsafe_allow_html=True)
+        # Filas interactivas emparejando HTML con botones nativos de Streamlit
+        for row in projects_list:
+            p_id, p_name, p_area, p_start, p_end, p_status = row
+            
+            # Elige el color del estado visual
+            if p_status == "Activo":
+                badge_style = "background-color: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;"
+            elif p_status == "Concluido":
+                badge_style = "background-color: #e2e8f0; color: #475569; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;"
+            else:
+                badge_style = "background-color: #fee2e2; color: #b91c1c; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;"
+                
+            # Renderizar bloque de datos
+            st.markdown(f"""
+            <table style="width:100%; border-collapse: collapse; font-family: sans-serif; margin-top: -10px;">
+                <tr style="border-bottom: 1px solid #e2e8f0; background: white;">
